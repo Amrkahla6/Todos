@@ -3,12 +3,17 @@ package com.example.demo.service;
 import com.example.demo.entity.Authority;
 import com.example.demo.entity.User;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.request.AuthenticationRequest;
 import com.example.demo.request.RegisterRequest;
+import com.example.demo.response.AuthenticationResponse;
 import jakarta.transaction.Transactional;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 @Service
@@ -16,10 +21,14 @@ public class AuthenticationServiceImpl implements AuthenticationService{
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
 
-    public AuthenticationServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthenticationServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
+        this.jwtService = jwtService;
     }
 
     @Override
@@ -30,6 +39,20 @@ public class AuthenticationServiceImpl implements AuthenticationService{
         }
         User user = buildNewUser(input);
         userRepository.save(user);
+    }
+
+    @Override
+    public AuthenticationResponse login(AuthenticationRequest request) throws Exception {
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+        );
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+
+        String jwtToken = jwtService.generateToken(new HashMap<>(), user);
+
+        return new AuthenticationResponse(jwtToken);
     }
 
     private User buildNewUser(RegisterRequest input) {
